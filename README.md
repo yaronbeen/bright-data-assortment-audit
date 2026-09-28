@@ -59,4 +59,6 @@ Use public product URLs for legitimate market research and follow Amazon, Bright
 
 ## Bright Data
 
+This project is an independent demonstration and is not affiliated with, endorsed by, or an official product of Bright Data.
+
 Powered by [Bright Data Amazon Scraper API](https://brightdata.com/products/web-scraper/amazon). MIT licensed.
