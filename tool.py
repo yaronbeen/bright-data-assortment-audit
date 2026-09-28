@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -44,6 +45,13 @@ def collect_products(urls, api_key):
         return json.load(response)
 
 
+def emit_cli_error(error, cohort=None):
+    status = error.code if isinstance(error, HTTPError) else None
+    message = f"Product collection failed{f' for {cohort} cohort' if cohort else ''}{f' with HTTP {status}' if status else ''}; no automatic retry was attempted."
+    print(json.dumps({"error": {"code": "http_error" if status else "collection_error", "message": message, "retryable": False}}), file=sys.stderr)
+    raise SystemExit(1)
+
+
 def main():
     if len(sys.argv) < 2:
         raise SystemExit("Usage: python3 tool.py SAMPLE.json | --live URLS.json")
@@ -56,8 +64,14 @@ def main():
             validate_cohorts(groups)
         except ValueError as error:
             raise SystemExit(str(error)) from error
-        own = collect_products(groups["own"], os.environ["BRIGHT_DATA_API_KEY"])
-        peers = collect_products(groups.get("peers", []), os.environ["BRIGHT_DATA_API_KEY"])
+        try:
+            own = collect_products(groups["own"], os.environ["BRIGHT_DATA_API_KEY"])
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError, RuntimeError) as error:
+            emit_cli_error(error, "own")
+        try:
+            peers = collect_products(groups["peers"], os.environ["BRIGHT_DATA_API_KEY"])
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError, RuntimeError) as error:
+            emit_cli_error(error, "peers")
     else:
         with open(sys.argv[1], encoding="utf-8") as source:
             records = json.load(source)

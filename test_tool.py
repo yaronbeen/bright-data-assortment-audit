@@ -54,6 +54,25 @@ class AssortmentAuditTests(unittest.TestCase):
         self.assertEqual(result["observed_key_presence"]["own"]["color"], {"present": 1, "rate": 0.5})
         self.assertEqual(result["observed_key_presence"]["peers"]["color"], {"present": 1, "rate": 1.0})
 
+    def test_live_cli_failure_returns_structured_nonretryable_error(self):
+        import json
+        import os
+        import tempfile
+        from contextlib import redirect_stderr
+        from io import StringIO
+        from urllib.error import URLError
+        from tool import main
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8") as source:
+            json.dump({"own": ["https://www.amazon.com/dp/B000000001"], "peers": ["https://www.amazon.com/dp/B000000002"]}, source)
+            source.flush()
+            with patch.dict(os.environ, {"BRIGHT_DATA_API_KEY": "secret-token"}), patch("sys.argv", ["tool.py", "--live", source.name]), patch("tool.collect_products", side_effect=URLError("secret-token")), redirect_stderr(StringIO()) as error:
+                with self.assertRaises(SystemExit) as exit_error:
+                    main()
+        payload = json.loads(error.getvalue())
+        self.assertEqual(exit_error.exception.code, 1)
+        self.assertFalse(payload["error"]["retryable"])
+        self.assertNotIn("secret-token", error.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
