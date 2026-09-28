@@ -1,0 +1,8 @@
+{
+  "own": [
+    {"title": "Travel Bottle", "asin": "B000000001", "brand": "Northstar", "color": "blue", "capacity": "750ml"}
+  ],
+  "peers": [
+    {"title": "Trail Bottle", "asin": "B000000002", "brand": "Harbor", "color": "steel", "insulation": "double-wall"}
+  ]
+}
