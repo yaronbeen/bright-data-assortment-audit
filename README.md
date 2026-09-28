@@ -22,7 +22,7 @@ cp .env.example .env
 export BRIGHT_DATA_API_KEY="your-key"
 ```
 
-Bright Data documents Amazon product records with title, ASIN, brand, price, rating, review count, seller, and availability. This adapter uses the documented product dataset `gd_l7q7dkf244hwjntr0`, synchronous `POST /datasets/v3/scrape`, and the 20-URL request bound. References: [Amazon Scraper API](https://docs.brightdata.com/products/scrapers/amazon/introduction.md), [quickstart](https://docs.brightdata.com/products/scrapers/amazon/quickstart.md), [product response schema](https://docs.brightdata.com/api-reference/scrapers/e-commerce-apis/amazon-products-collect-by-url).
+Bright Data documents Amazon product records with title, ASIN, brand, price, rating, review count, seller, and availability. This adapter uses product dataset `gd_l7q7dkf244hwjntr0` and synchronous `POST /datasets/v3/scrape`. This tool imposes a 20-URL maximum per cohort; treat it as this tool's request bound unless the current source documentation confirms a platform-level cap. References: [Amazon Scraper API](https://docs.brightdata.com/products/scrapers/amazon/introduction.md), [quickstart](https://docs.brightdata.com/products/scrapers/amazon/quickstart.md), [product response schema](https://docs.brightdata.com/api-reference/scrapers/e-commerce-apis/amazon-products-collect-by-url).
 
 ## Run
 
@@ -33,11 +33,13 @@ BRIGHT_DATA_API_KEY="your-key" python3 tool.py --live urls.json
 python3 -m unittest -v
 ```
 
-The live command collects URLs from the `own` and `peers` arrays separately, then compares the two returned record sets. This intentionally makes group assignment explicit. Each non-empty group is one request. Live API calls may incur charges; a 202 async response is reported rather than silently polled.
+The live command validates that both cohorts contain 1-20 valid URLs before making any request, then collects the cohorts separately. This intentionally makes group assignment explicit. Each cohort is one request and may incur charges. A 202 async response is reported rather than silently polled. Requests are not automatically retried because a repeated billable POST may duplicate usage. If one cohort request fails, the CLI returns a structured error naming the failed cohort and exits 1; it does not emit partial comparison results or claim per-URL status because collection is submitted as a batch.
 
 ## Outputs
 
-JSON reports sample sizes and observed attribute keys unique to either sample or shared by both. Price fields are not used to generate a price delta. Empty fields are ignored; values are not interpreted semantically.
+JSON reports sample sizes, observed attribute keys unique to either sample or shared by both, and per-cohort presence counts/rates for each key. The unique/shared lists mean only that a key was observed at least once in a cohort; they are not coverage, quality, or semantic-value assessments. Price fields are not used to generate a price delta. Empty fields are ignored; values are not interpreted semantically.
+
+On live HTTP/network/API failure, the CLI writes a JSON object to stderr with an `error` containing a stable `code`, sanitized `message`, and `retryable: false`, then exits 1. Success JSON remains on stdout. No automatic retry is made.
 
 ## Differentiation
 
@@ -47,7 +49,7 @@ Existing account projects include a competitor pricing tracker and the WIP Amazo
 
 **Does it recommend which product attributes to add?** No. It highlights observed differences for human evaluation.
 
-**Can it process more than 20 URLs?** The documented synchronous endpoint is capped at 20. This demo fails clearly rather than quietly launching an async job; use Bright Data's documented async workflow for larger collections.
+**Can it process more than 20 URLs per cohort?** No. This tool enforces a 20-URL bound per cohort before making either request. It fails clearly rather than quietly launching an async job; use Bright Data's documented async workflow for larger collections.
 
 **Can I run without credentials?** Yes. The synthetic fixture and unit tests are offline.
 
