@@ -12,7 +12,22 @@ def compare_assortment(own_products, peer_products):
     def attributes(rows):
         return {key for row in rows for key, value in row.items() if key not in {"title", "asin", "url", "product_url"} and value not in (None, "", [], {})}
     own, peers = attributes(own_products), attributes(peer_products)
-    return {"own_product_count": len(own_products), "peer_product_count": len(peer_products), "owned_only_attributes": sorted(own - peers), "peer_only_attributes": sorted(peers - own), "shared_attributes": sorted(own & peers), "decision_note": "Use peer-only attributes as a catalog research checklist; this does not prove customer demand or product quality."}
+    all_keys = own | peers
+    observed = lambda rows: {key: {"present": sum(row.get(key) not in (None, "", [], {}) for row in rows), "rate": round(sum(row.get(key) not in (None, "", [], {}) for row in rows) / len(rows), 3)} for key in sorted(all_keys)}
+    return {"own_product_count": len(own_products), "peer_product_count": len(peer_products), "owned_only_attributes": sorted(own - peers), "peer_only_attributes": sorted(peers - own), "shared_attributes": sorted(own & peers), "observed_key_presence": {"own": observed(own_products), "peers": observed(peer_products)}, "decision_note": "Attribute lists indicate observed-key presence at least once, not meaningful catalog coverage. Per-cohort counts and rates are provided; this does not prove customer demand or product quality."}
+
+
+def validate_cohorts(groups):
+    for cohort in ("own", "peers"):
+        urls = groups.get(cohort)
+        if not isinstance(urls, list) or not 1 <= len(urls) <= 20:
+            raise ValueError(f"Both cohorts must contain 1 to 20 product URLs; invalid {cohort} cohort")
+        for url in urls:
+            if not isinstance(url, str):
+                raise ValueError(f"Every {cohort} product URL must be a string")
+            parsed = urlparse(url)
+            if parsed.scheme != "https" or parsed.hostname not in {"amazon.com", "www.amazon.com"} or not ("/dp/" in parsed.path or "/gp/product/" in parsed.path):
+                raise ValueError(f"Not a supported public Amazon product URL: {url}")
 
 
 def collect_products(urls, api_key):
@@ -37,7 +52,11 @@ def main():
             raise SystemExit("Set BRIGHT_DATA_API_KEY and provide a JSON file with own and peers URL arrays")
         with open(sys.argv[2], encoding="utf-8") as source:
             groups = json.load(source)
-        own = collect_products(groups.get("own", []), os.environ["BRIGHT_DATA_API_KEY"])
+        try:
+            validate_cohorts(groups)
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
+        own = collect_products(groups["own"], os.environ["BRIGHT_DATA_API_KEY"])
         peers = collect_products(groups.get("peers", []), os.environ["BRIGHT_DATA_API_KEY"])
     else:
         with open(sys.argv[1], encoding="utf-8") as source:

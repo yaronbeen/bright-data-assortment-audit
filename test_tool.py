@@ -35,6 +35,25 @@ class AssortmentAuditTests(unittest.TestCase):
                 collect_products(["https://www.amazon.com/dp/B000000001"] * 21, "test-key")
             mocked.assert_not_called()
 
+    def test_live_main_validates_both_cohorts_before_any_request(self):
+        import json
+        import os
+        import tempfile
+        from unittest.mock import patch
+        from tool import main
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8") as source:
+            json.dump({"own": ["https://www.amazon.com/dp/B000000001"], "peers": []}, source)
+            source.flush()
+            with patch.dict(os.environ, {"BRIGHT_DATA_API_KEY": "test-key"}), patch("sys.argv", ["tool.py", "--live", source.name]), patch("tool.urlopen") as mocked:
+                with self.assertRaisesRegex(SystemExit, "Both cohorts"):
+                    main()
+                mocked.assert_not_called()
+
+    def test_observed_attribute_key_counts_are_reported_per_cohort(self):
+        result = compare_assortment([{"color": "blue"}, {}], [{"color": "red"}])
+        self.assertEqual(result["observed_key_presence"]["own"]["color"], {"present": 1, "rate": 0.5})
+        self.assertEqual(result["observed_key_presence"]["peers"]["color"], {"present": 1, "rate": 1.0})
+
 
 if __name__ == "__main__":
     unittest.main()
